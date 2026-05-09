@@ -71,7 +71,13 @@ async function startServer() {
 
   app.post('/api/draft', (req, res) => {
     const { studentId, submissions } = req.body;
-    if (!studentId) return res.status(400).json({ error: 'Student ID required' });
+    if (!studentId) return res.status(400).json({ 
+      error: {
+        message: 'Student ID required',
+        code: 'MISSING_ID',
+        timestamp: new Date().toISOString()
+      } 
+    });
     
     drafts[studentId] = submissions;
     saveData(DRAFTS_FILE, drafts);
@@ -90,13 +96,25 @@ async function startServer() {
     const { id } = req.body;
 
     if (!id) {
-      return res.status(400).json({ error: 'Student ID is required.' });
+      return res.status(400).json({ 
+        error: {
+          message: 'Student ID is required.',
+          code: 'AUTH_MISSING_ID',
+          timestamp: new Date().toISOString()
+        } 
+      });
     }
 
     const student = students.find(s => s.id === id);
 
     if (!student) {
-      return res.status(401).json({ error: 'Identity not recognized.' });
+      return res.status(401).json({ 
+        error: {
+          message: 'Identity not recognized.',
+          code: 'AUTH_INVALID_ID',
+          timestamp: new Date().toISOString()
+        } 
+      });
     }
 
     // Check if already voted
@@ -113,23 +131,47 @@ async function startServer() {
     const { evaluatorId, submissions } = req.body;
 
     if (!evaluatorId || !submissions) {
-      return res.status(400).json({ error: 'Incomplete submission data.' });
+      return res.status(400).json({ 
+        error: {
+          message: 'Incomplete submission data.',
+          code: 'EVAL_INCOMPLETE',
+          timestamp: new Date().toISOString()
+        } 
+      });
     }
 
     // Check if already submitted
     if (evaluations.some(e => e.evaluatorId === evaluatorId)) {
-      return res.status(400).json({ error: 'Your evaluation has already been recorded.' });
+      return res.status(400).json({ 
+        error: {
+          message: 'Your evaluation has already been recorded.',
+          code: 'EVAL_DUPLICATE',
+          timestamp: new Date().toISOString()
+        } 
+      });
     }
 
     // Validate self-scoring
     if (submissions.some((s: any) => s.studentId === evaluatorId)) {
-      return res.status(400).json({ error: 'You cannot evaluate yourself.' });
+      return res.status(400).json({ 
+        error: {
+          message: 'You cannot evaluate yourself.',
+          code: 'EVAL_SELF_SCORE',
+          timestamp: new Date().toISOString()
+        } 
+      });
     }
 
     // Validate all other students are evaluated
     const otherStudentsCount = students.length - 1;
     if (submissions.length < otherStudentsCount) {
-        return res.status(400).json({ error: `Please evaluate all ${otherStudentsCount} other students.` });
+        return res.status(400).json({ 
+          error: {
+            message: `Please evaluate all ${otherStudentsCount} other students.`,
+            code: 'EVAL_MISSING_STUDENTS',
+            timestamp: new Date().toISOString()
+          } 
+        });
     }
 
     evaluations.push({ evaluatorId, submissions });

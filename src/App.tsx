@@ -55,6 +55,12 @@ interface Submission {
   comment: string;
 }
 
+interface AppError {
+  message: string;
+  code?: string;
+  timestamp?: string;
+}
+
 type View = 'login' | 'evaluate' | 'submitting' | 'success' | 'leaderboard';
 
 export default function App() {
@@ -64,7 +70,7 @@ export default function App() {
   const [submissions, setSubmissions] = useState<Record<string, { score: number; comment: string }>>({});
   const [results, setResults] = useState<Result[]>([]);
   const [totalSubmissions, setTotalSubmissions] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
   const [loading, setLoading] = useState(false);
   const [loginForm, setLoginForm] = useState({ name: '', email: '' });
   const [draftSaving, setDraftSaving] = useState(false);
@@ -87,7 +93,11 @@ export default function App() {
       const data = await res.json();
       setStudents(data);
     } catch (err) {
-      setError('Failed to load students');
+      setError({ 
+        message: 'Failed to load students',
+        code: 'FETCH_STUDENTS_FAILED',
+        timestamp: new Date().toISOString()
+      });
     }
   };
 
@@ -98,7 +108,11 @@ export default function App() {
       setResults(data.results);
       setTotalSubmissions(data.totalSubmissions);
     } catch (err) {
-      setError('Failed to load results');
+      setError({ 
+        message: 'Failed to load results',
+        code: 'FETCH_RESULTS_FAILED',
+        timestamp: new Date().toISOString()
+      });
     }
   };
 
@@ -117,7 +131,11 @@ export default function App() {
       
       if (res.ok) {
         if (data.alreadyVoted) {
-            setError('You have already submitted your evaluation.');
+            setError({ 
+              message: 'You have already submitted your evaluation.',
+              code: 'VOTE_ALREADY_SUBMITTED',
+              timestamp: new Date().toISOString()
+            });
             return;
         }
         
@@ -142,10 +160,14 @@ export default function App() {
         setSubmissions(initial);
         if (draftData.draft) setLastSaved(new Date());
       } else {
-        setError(data.error || 'Identity verification failed');
+        setError(data.error || { message: 'Identity verification failed' });
       }
     } catch (err) {
-      setError('Network error');
+      setError({ 
+        message: 'Network error',
+        code: 'NETWORK_ERROR',
+        timestamp: new Date().toISOString()
+      });
     } finally {
       setLoading(false);
     }
@@ -197,10 +219,14 @@ export default function App() {
         setView('success');
         fetchResults();
       } else {
-        setError(data.error || 'Submission failed');
+        setError(data.error || { message: 'Submission failed' });
       }
     } catch (err) {
-      setError('Network error');
+      setError({ 
+        message: 'Network error',
+        code: 'NETWORK_ERROR',
+        timestamp: new Date().toISOString()
+      });
     } finally {
       setLoading(false);
     }
@@ -299,42 +325,56 @@ export default function App() {
               </div>
 
               {error && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-xs font-bold animate-shake flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 shrink-0" />
-                    <span>{error}</span>
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-100 animate-shake flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+                      <span className="font-bold text-sm">{error.message}</span>
+                    </div>
+                    {(error.code || error.timestamp) && (
+                      <div className="mt-1 pt-2 border-t border-red-500/20 flex flex-wrap gap-x-4 gap-y-1">
+                        {error.code && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[8px] uppercase font-black tracking-tighter text-red-500/70">Code</span>
+                            <span className="text-[10px] font-mono text-red-400/80">{error.code}</span>
+                          </div>
+                        )}
+                        {error.timestamp && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[8px] uppercase font-black tracking-tighter text-red-500/70">Time</span>
+                            <span className="text-[10px] font-mono text-red-400/80">{new Date(error.timestamp).toLocaleTimeString()}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </div>
               )}
 
-              <div className="relative group">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
-                <input
-                  type="text"
-                  placeholder="Search your name..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/20 transition-all backdrop-blur-xl"
-                />
-              </div>
-
-              <div className="bg-white/5 border border-white/10 backdrop-blur-xl rounded-2xl p-6 space-y-3 custom-scrollbar max-h-[60vh] overflow-y-auto shadow-2xl">
-                {students
-                  .filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((student) => (
-                  <button
-                    key={student.id}
-                    disabled={loading}
-                    onClick={() => handleLogin(student.id)}
-                    className="w-full group bg-white/5 p-4 rounded-xl border border-white/5 flex items-center justify-between hover:bg-white/10 hover:border-indigo-500/50 transition-all disabled:opacity-50"
+              <div className="space-y-4">
+                <div className="relative group">
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors" />
+                  <select
+                    value={currentUser?.id || ''}
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleLogin(e.target.value);
+                      }
+                    }}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl py-4 pl-11 pr-10 text-slate-200 focus:outline-none focus:border-indigo-500/50 appearance-none cursor-pointer backdrop-blur-xl"
                   >
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 group-hover:text-indigo-400 border border-white/5 transition-colors">
-                            {student.name.split(' ').map(n => n[0]).join('')}
-                        </div>
-                        <span className="font-medium text-lg text-slate-200">{student.name}</span>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-slate-500 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all" />
-                  </button>
-                ))}
+                    <option value="" className="bg-slate-900">Choose your name...</option>
+                    {students.sort((a, b) => a.name.localeCompare(b.name)).map((student) => (
+                      <option key={student.id} value={student.id} className="bg-slate-900">
+                        {student.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none group-hover:translate-x-1 transition-transform rotate-90" />
+                </div>
+                
+                <p className="text-[10px] text-slate-500 text-center uppercase tracking-widest leading-relaxed">
+                  Note: You can only vote once. <br />
+                  Make sure you select the correct identity.
+                </p>
               </div>
               
               <div className="text-center">
